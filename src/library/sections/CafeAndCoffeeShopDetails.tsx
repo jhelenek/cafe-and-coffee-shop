@@ -14,6 +14,8 @@ import { parsePhoneNumber } from "awesome-phonenumber";
 import {
   ComprehensiveCTA,
   getAnalyticsScopeHash,
+  getSurfaceColorStyle,
+  getThemeColorCssValue,
   isDarkColor,
   resolveComponentData,
   type StreamDocument,
@@ -29,6 +31,15 @@ import {
   Background,
   EntityField,
 } from "@yext/visual-editor";
+import {
+  createTextField,
+  createTranslatableString,
+  defaultTextStyles,
+  getStyledTextStyle,
+  hasExplicitCtaColor,
+  resolveTextFieldValue,
+  resolveTranslatableStringValue,
+} from "../shared/sectionHelpers";
 
 type TextWithColor = {
   text: YextEntityField<TranslatableString>;
@@ -99,31 +110,6 @@ export type CafeAndCoffeeShopDetailsProps = {
   };
 };
 
-const createTranslatableString = (value: string): TranslatableString => ({
-  defaultValue: value,
-  hasLocalizedValue: "true",
-});
-
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const createTextField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(value),
-  constantValueEnabled,
-});
-
 const createStringField = (
   value: string,
   field = "",
@@ -181,11 +167,7 @@ const textWithColorFields = (label: string) => ({
 });
 
 const createStyledTextValue = (): StyledTextValue => ({
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
+  ...defaultTextStyles,
 });
 
 const createTextWithColor = (value: string): TextWithColor => ({
@@ -807,80 +789,18 @@ a, button {
 }
 `;
 
-const toThemeCss = (token?: string) => {
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
-};
-
-const hasExplicitCtaColor = (cta: CtaColorState) => {
-  const selectedColor = cta.styles?.color?.selectedColor;
-  return Boolean(selectedColor && selectedColor !== "default");
-};
-
-const getStyledTextCss = (
-  styles: StyledTextValue,
-  color?: ThemeColor,
-): React.CSSProperties => ({
-  color: toThemeCss(color?.selectedColor),
-  fontFamily: styles.fontFamily === "default" ? undefined : styles.fontFamily,
-  fontSize: styles.fontSize === "default" ? undefined : styles.fontSize,
-  fontWeight: styles.fontWeight === "default" ? undefined : styles.fontWeight,
-  fontStyle: styles.fontStyle === "default" ? undefined : styles.fontStyle,
-  textTransform:
-    styles.textTransform === "default" ? undefined : styles.textTransform,
-});
-
 const getPhoneRegionCode = (address: AddressType | null) => {
   const countryCode = address?.countryCode?.trim().toUpperCase();
   return countryCode?.length === 2 ? countryCode : "US";
 };
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  resolveComponentData(field, locale, streamDocument)?.trim() ||
-  resolveTranslatableStringValue(
-    field.constantValue,
-    locale,
-    streamDocument,
-    fallback,
-  ).trim();
 
 const CafeAndCoffeeShopDetailsComponent: PuckComponent<
   CafeAndCoffeeShopDetailsProps
 > = (props) => {
   const streamDocument = useDocument<StreamDocument>();
   const locale = streamDocument?.locale ?? "en";
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
   const isEditing = Boolean(props.puck?.isEditing);
   const headingText = resolveTextFieldValue(
     props.heading.text,
@@ -955,8 +875,7 @@ const CafeAndCoffeeShopDetailsComponent: PuckComponent<
     "string"
       ? (streamDocument as Record<string, string>).additionalHoursText.trim()
       : "";
-  const dividerColor =
-    toThemeCss(props.section.backgroundColor.contrastingColor) ?? "#2a2a2a";
+  const dividerColor = sectionStyle.color ?? "#2a2a2a";
   const addressSubheading = resolveTextFieldValue(
     props.address.subheading.text,
     locale,
@@ -1024,6 +943,7 @@ const CafeAndCoffeeShopDetailsComponent: PuckComponent<
         <Background
           className="cafe-scope no-touchevents page-caffeine"
           background={props.section.backgroundColor}
+          style={sectionStyle}
         >
           <style>{CafeAndCoffeeShopStyles}</style>
           <section
@@ -1038,7 +958,7 @@ const CafeAndCoffeeShopDetailsComponent: PuckComponent<
               >
                 <h2
                   className="details__title"
-                  style={getStyledTextCss(
+                  style={getStyledTextStyle(
                     props.heading.styles,
                     props.heading.fontColor,
                   )}
@@ -1064,7 +984,7 @@ const CafeAndCoffeeShopDetailsComponent: PuckComponent<
                       }
                     >
                       <h3
-                        style={getStyledTextCss(
+                        style={getStyledTextStyle(
                           props.address.subheading.styles,
                           props.address.subheading.fontColor,
                         )}
@@ -1097,7 +1017,7 @@ const CafeAndCoffeeShopDetailsComponent: PuckComponent<
                       }
                     >
                       <h3
-                        style={getStyledTextCss(
+                        style={getStyledTextStyle(
                           props.phone.subheading.styles,
                           props.phone.subheading.fontColor,
                         )}
@@ -1180,7 +1100,7 @@ const CafeAndCoffeeShopDetailsComponent: PuckComponent<
                       }
                     >
                       <h3
-                        style={getStyledTextCss(
+                        style={getStyledTextStyle(
                           props.otherDetails.subheading.styles,
                           props.otherDetails.subheading.fontColor,
                         )}
@@ -1198,7 +1118,7 @@ const CafeAndCoffeeShopDetailsComponent: PuckComponent<
                     >
                       <p
                         style={{
-                          color: toThemeCss(item.fontColor?.selectedColor),
+                          color: getThemeColorCssValue(item.fontColor),
                         }}
                       >
                         {resolveTextFieldValue(
@@ -1220,7 +1140,7 @@ const CafeAndCoffeeShopDetailsComponent: PuckComponent<
                       }
                     >
                       <h3
-                        style={getStyledTextCss(
+                        style={getStyledTextStyle(
                           props.hours.subheading.styles,
                           props.hours.subheading.fontColor,
                         )}

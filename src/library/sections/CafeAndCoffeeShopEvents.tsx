@@ -8,8 +8,9 @@ import {
   Background,
   EntityField,
   Image,
-  getDefaultRTF,
   getAnalyticsScopeHash,
+  getSurfaceColorStyle,
+  getThemeColorCssValue,
   isDarkColor,
   resolveComponentData,
   MaybeRTF,
@@ -27,6 +28,16 @@ import {
   type YextFields,
   ComprehensiveCTAValue,
 } from "@yext/visual-editor";
+import {
+  createRtfField,
+  createTextField,
+  createTranslatableString,
+  defaultTextStyles,
+  getStyledTextStyle,
+  hasExplicitCtaColor,
+  hasImageSource,
+  resolveTextFieldValue,
+} from "../shared/sectionHelpers";
 
 type EventsImageProps = {
   image: YextEntityField<ImageType | ComplexImageType | TranslatableAssetImage>;
@@ -68,44 +79,6 @@ const eventImageUrl =
 const defaultImageStyles: StyledImageValue = {
   borderRadius: "default",
 };
-
-const createTranslatableString = (value: string): TranslatableString => ({
-  defaultValue: value,
-  hasLocalizedValue: "true",
-});
-
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const createTextField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(value),
-  constantValueEnabled,
-});
-
-const createRtfField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableRichText> => ({
-  field,
-  constantValue: {
-    en: getDefaultRTF(value),
-    hasLocalizedValue: "true",
-  },
-  constantValueEnabled,
-});
 
 const createImageField = (
   url: string,
@@ -369,95 +342,6 @@ a, button {
 }
 `;
 
-const toThemeCss = (token?: string) => {
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
-};
-
-const hasExplicitCtaColor = (cta: CtaColorState) => {
-  const selectedColor = cta.styles?.color?.selectedColor;
-  return Boolean(selectedColor && selectedColor !== "default");
-};
-
-const getStyledTextCss = (
-  styles: StyledTextValue,
-  color?: ThemeColor,
-): React.CSSProperties => ({
-  color: toThemeCss(color?.selectedColor),
-  fontFamily: styles.fontFamily === "default" ? undefined : styles.fontFamily,
-  fontSize: styles.fontSize === "default" ? undefined : styles.fontSize,
-  fontWeight: styles.fontWeight === "default" ? undefined : styles.fontWeight,
-  fontStyle: styles.fontStyle === "default" ? undefined : styles.fontStyle,
-  textTransform:
-    styles.textTransform === "default" ? undefined : styles.textTransform,
-});
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  resolveComponentData(field, locale, streamDocument)?.trim() ||
-  resolveTranslatableStringValue(
-    field.constantValue,
-    locale,
-    streamDocument,
-    fallback,
-  ).trim();
-
-const hasImageSource = (
-  image: ImageType | ComplexImageType | TranslatableAssetImage | undefined,
-): image is ImageType | ComplexImageType | TranslatableAssetImage => {
-  if (!image || typeof image !== "object") {
-    return false;
-  }
-
-  if ("url" in image && typeof image.url === "string" && image.url.trim()) {
-    return true;
-  }
-
-  if (
-    "image" in image &&
-    image.image &&
-    typeof image.image === "object" &&
-    "url" in image.image &&
-    typeof image.image.url === "string" &&
-    image.image.url.trim()
-  ) {
-    return true;
-  }
-
-  return false;
-};
-
 const imageFields = (label: string): YextFields<EventsImageProps> => ({
   image: {
     label: "Image",
@@ -484,14 +368,6 @@ const imageFields = (label: string): YextFields<EventsImageProps> => ({
     type: "styledImage",
   },
 });
-
-const defaultTextStyles: StyledTextValue = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-};
 
 const defaultContent = {
   paragraphs: {
@@ -681,9 +557,9 @@ const CafeAndCoffeeShopEventsComponent = (
   const streamDocument = useDocument<StreamDocument>();
   const locale = streamDocument?.locale ?? "en";
   const isEditing = Boolean(props.puck?.isEditing);
-  const sectionForeground = toThemeCss(
-    props.section.backgroundColor.contrastingColor,
-  );
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
+  const sectionForeground = sectionStyle.color;
   const sectionImage = resolveComponentData(
     props.sectionImage.image,
     locale,
@@ -718,16 +594,13 @@ const CafeAndCoffeeShopEventsComponent = (
   };
   const richTextStyleOverrides = {
     color:
-      props.content.paragraphs.fontColor?.selectedColor ??
-      props.section.backgroundColor.contrastingColor,
+      getThemeColorCssValue(props.content.paragraphs.fontColor) ??
+      sectionForeground,
   };
   const resolvedParagraphs = resolveComponentData(
     props.content.paragraphs.text,
     locale,
     streamDocument,
-    {
-      richTextStyleOverrides,
-    },
   );
 
   return (
@@ -745,6 +618,7 @@ const CafeAndCoffeeShopEventsComponent = (
             className="local-section section-events"
             aria-label="Group Events"
             background={props.section.backgroundColor}
+            style={sectionStyle}
           >
             <div
               className={`events__grid${hasSectionImage ? "" : " events__grid--no-image"}`}
@@ -752,9 +626,7 @@ const CafeAndCoffeeShopEventsComponent = (
               <article
                 className="events__panel events__panel--text"
                 style={{
-                  backgroundColor: toThemeCss(
-                    props.section.backgroundColor.selectedColor,
-                  ),
+                  backgroundColor: sectionStyle.backgroundColor,
                   color: sectionForeground,
                 }}
               >
@@ -769,12 +641,12 @@ const CafeAndCoffeeShopEventsComponent = (
                     <h2
                       className="events__title"
                       style={{
-                        ...getStyledTextCss(
+                        ...getStyledTextStyle(
                           props.heading.styles,
                           props.heading.fontColor,
                         ),
                         color:
-                          toThemeCss(props.heading.fontColor?.selectedColor) ??
+                          getThemeColorCssValue(props.heading.fontColor) ??
                           sectionForeground,
                       }}
                     >

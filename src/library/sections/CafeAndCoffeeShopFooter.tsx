@@ -14,6 +14,8 @@ import {
   EntityField,
   Image,
   getAnalyticsScopeHash,
+  getSurfaceColorStyle,
+  getThemeColorCssValue as toThemeCss,
   isDarkColor,
   msg,
   resolveComponentData,
@@ -30,6 +32,17 @@ import {
   useDocument,
   VisibilityWrapper,
 } from "@yext/visual-editor";
+import {
+  createTextField,
+  createTranslatableString,
+  defaultButtonStyles,
+  defaultTextStyles,
+  getStyleValue,
+  getStyledTextStyle,
+  hasImageSource,
+  resolveTextFieldValue,
+  resolveTranslatableStringValue,
+} from "../shared/sectionHelpers";
 
 type StyledTextProps = {
   text: YextEntityField<TranslatableString>;
@@ -115,24 +128,6 @@ const socialIconAssetDimensions: Record<
   yelp: { width: 800, height: 1002 },
 };
 
-const defaultTextStyles: StyledTextValue = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-};
-
-const defaultCTAButtonStyles = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-  borderRadius: "default",
-  letterSpacing: "default",
-};
-
 const linkTypeOptions = () => [
   { label: "URL", value: "URL" },
   { label: "Email", value: "Email" },
@@ -141,31 +136,6 @@ const linkTypeOptions = () => [
   { label: "Click To Website", value: "CLICK_TO_WEBSITE" },
   { label: "Other", value: "OTHER" },
 ];
-
-const createTranslatableString = (value: string): TranslatableString => ({
-  defaultValue: value,
-  hasLocalizedValue: "true",
-});
-
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const createTextField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(value),
-  constantValueEnabled,
-});
 
 const createStyledText = (
   value: string,
@@ -223,7 +193,7 @@ const createCTA = (
       variant: presetImage ? "link" : "link",
       color: undefined,
       presetImage: presetImage,
-      button: defaultCTAButtonStyles,
+      button: defaultButtonStyles,
       link: {
         fontFamily: "default",
         fontSize: "default",
@@ -831,67 +801,6 @@ a, button {
 
 }`;
 
-const toThemeCss = (token?: string) => {
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
-};
-
-const getStyleValue = (value: string) =>
-  value === "default" || value.length === 0 ? undefined : value;
-
-const getStyledTextStyle = (
-  value: StyledTextProps,
-  fallbackColor?: string,
-): React.CSSProperties => ({
-  color: toThemeCss(value.fontColor?.selectedColor) ?? fallbackColor,
-  fontFamily: getStyleValue(value.styles.fontFamily),
-  fontSize: getStyleValue(value.styles.fontSize),
-  fontWeight: getStyleValue(value.styles.fontWeight),
-  fontStyle: getStyleValue(value.styles.fontStyle),
-  textTransform: getStyleValue(value.styles.textTransform),
-});
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  resolveComponentData(field, locale, streamDocument)?.trim() ||
-  resolveTranslatableStringValue(
-    field.constantValue,
-    locale,
-    streamDocument,
-    fallback,
-  ).trim();
-  
 const resolveBrandName = (
   brand: CafeAndCoffeeShopFooterProps["brand"],
   locale: string,
@@ -933,31 +842,6 @@ const resolveFooterLinkLabel = (
     streamDocument,
     fallback,
   );
-
-const hasImageSource = (
-  image: ImageType | ComplexImageType | TranslatableAssetImage | undefined,
-): image is ImageType | ComplexImageType | TranslatableAssetImage => {
-  if (!image || typeof image !== "object") {
-    return false;
-  }
-
-  if ("url" in image && typeof image.url === "string" && image.url.trim()) {
-    return true;
-  }
-
-  if (
-    "image" in image &&
-    image.image &&
-    typeof image.image === "object" &&
-    "url" in image.image &&
-    typeof image.image.url === "string" &&
-    image.image.url.trim()
-  ) {
-    return true;
-  }
-
-  return false;
-};
 
 const resolveSocialIconAltText = (
   icon: ImageType | ComplexImageType | TranslatableAssetImage | undefined,
@@ -1006,6 +890,8 @@ const CafeAndCoffeeShopFooterComponent: PuckComponent<
 > = (props) => {
   const streamDocument = useDocument<StreamDocument>();
   const locale = streamDocument?.locale ?? "en";
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
   const isEditing = Boolean(props.puck?.isEditing);
   const isDarkBackground = isDarkColor(
     props.section.backgroundColor,
@@ -1023,19 +909,12 @@ const CafeAndCoffeeShopFooterComponent: PuckComponent<
       "--color-background-footer" | "--color-text-footer",
       string | undefined
     > = {
-    "--color-background-footer": toThemeCss(
-      props.section.backgroundColor.selectedColor,
-    ),
-    "--color-text-footer": toThemeCss(
-      props.section.backgroundColor.contrastingColor,
-    ),
+    "--color-background-footer": sectionStyle.backgroundColor,
+    "--color-text-footer": sectionStyle.color,
   };
-  const brandTextColor = toThemeCss(
-    props.section.backgroundColor.contrastingColor,
-  );
+  const brandTextColor = sectionStyle.color;
   const footerLinkColor =
-    toThemeCss(props.fontColor?.selectedColor) ??
-    toThemeCss(props.section.backgroundColor.contrastingColor);
+    toThemeCss(props.fontColor?.selectedColor) ?? sectionStyle.color;
   const socialLinks = (
     props.socialLinks as Array<
       FooterSocialLinkValue | LegacyFooterSocialLinkValue
@@ -1105,7 +984,8 @@ const CafeAndCoffeeShopFooterComponent: PuckComponent<
                   >
                     <h2
                       style={getStyledTextStyle(
-                        props.brand.name,
+                        props.brand.name.styles,
+                        props.brand.name.fontColor,
                         brandTextColor,
                       )}
                     >

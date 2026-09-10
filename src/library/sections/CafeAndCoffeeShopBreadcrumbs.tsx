@@ -5,6 +5,8 @@ import { AnalyticsScopeProvider, Link } from "@yext/pages-components";
 import {
   EntityField,
   getAnalyticsScopeHash,
+  getSurfaceColorStyle,
+  getThemeColorCssValue,
   isDarkColor,
   resolveBreadcrumbs,
   resolveComponentData,
@@ -19,6 +21,11 @@ import {
   type YextEntityField,
   type YextFields,
 } from "@yext/visual-editor";
+import {
+  createTextField,
+  defaultTextStyles,
+  getStyledTextStyle,
+} from "../shared/sectionHelpers";
 
 const CafeAndCoffeeShopStyles = String.raw`
 p {
@@ -223,84 +230,6 @@ export type CafeAndCoffeeShopBreadcrumbsProps = {
   };
 };
 
-const createTranslatableString = (value: string): TranslatableString => ({
-  defaultValue: value,
-  hasLocalizedValue: "true",
-});
-
-const createTextField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(value),
-  constantValueEnabled,
-});
-
-const defaultTextStyles: StyledTextValue = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-};
-
-const resolveThemeColorCssValue = (color?: ThemeColor): string | undefined => {
-  const token = color?.selectedColor;
-  if (!token || token === "default") {
-    return undefined;
-  }
-
-  const customColorMatch = token.match(/^\[(#[0-9A-Fa-f]{3,8})\]$/);
-  if (customColorMatch) {
-    return customColorMatch[1].toUpperCase();
-  }
-
-  switch (token) {
-    case "palette-primary":
-      return "var(--colors-palette-primary)";
-    case "palette-secondary":
-      return "var(--colors-palette-secondary)";
-    case "palette-tertiary":
-      return "var(--colors-palette-tertiary)";
-    case "palette-quaternary":
-      return "var(--colors-palette-quaternary)";
-    case "palette-primary-light":
-      return "hsl(from var(--colors-palette-primary) h s 98)";
-    case "palette-secondary-light":
-      return "hsl(from var(--colors-palette-secondary) h s 98)";
-    case "palette-tertiary-light":
-      return "hsl(from var(--colors-palette-tertiary) h s 98)";
-    case "palette-quaternary-light":
-      return "hsl(from var(--colors-palette-quaternary) h s 98)";
-    case "palette-primary-dark":
-      return "hsl(from var(--colors-palette-primary) h s 20)";
-    case "palette-secondary-dark":
-      return "hsl(from var(--colors-palette-secondary) h s 20)";
-    case "white":
-      return "#FFFFFF";
-    case "black":
-      return "#000000";
-    default:
-      return token;
-  }
-};
-
-const getTextStyles = (
-  styles: StyledTextValue,
-  color?: ThemeColor,
-  fallbackColor?: string,
-): React.CSSProperties => ({
-  color: resolveThemeColorCssValue(color) ?? fallbackColor,
-  fontFamily: styles.fontFamily === "default" ? undefined : styles.fontFamily,
-  fontSize: styles.fontSize === "default" ? undefined : styles.fontSize,
-  fontWeight: styles.fontWeight === "default" ? undefined : styles.fontWeight,
-  fontStyle: styles.fontStyle === "default" ? undefined : styles.fontStyle,
-  textTransform:
-    styles.textTransform === "default" ? undefined : styles.textTransform,
-});
-
 const resolveTextValue = (
   value: YextEntityField<TranslatableString>,
   locale: string,
@@ -430,14 +359,15 @@ const CafeAndCoffeeShopBreadcrumbsComponent = (
   }>();
   const locale = streamDocument?.locale ?? "en";
   const breadcrumbs = resolveBreadcrumbs(streamDocument) as BreadcrumbItem[];
-  const sectionTextColor = isDarkColor(
+  const sectionStyle = getSurfaceColorStyle(
     props.section.backgroundColor,
     streamDocument,
-  )
-    ? "#FFFFFF"
-    : "#000000";
-  const sectionBackgroundColor =
-    resolveThemeColorCssValue(props.section.backgroundColor) ?? "#3B2416";
+    { fallbackBackgroundColor: "#3B2416" },
+  );
+  const sectionTextColor = sectionStyle?.color ??
+    (isDarkColor(props.section.backgroundColor, streamDocument)
+      ? "#FFFFFF"
+      : "#000000");
   const rootLabel = resolveTextValue(
     props.rootLabel.text,
     locale,
@@ -461,7 +391,7 @@ const CafeAndCoffeeShopBreadcrumbsComponent = (
       : breadcrumbs.slice(0, -1);
   const currentBreadcrumbSlug = breadcrumbs[breadcrumbs.length - 1]?.slug;
   const separatorColor =
-    resolveThemeColorCssValue(props.currentLocation.label.fontColor) ??
+    getThemeColorCssValue(props.currentLocation.label.fontColor) ??
     sectionTextColor;
 
   if (!breadcrumbs.length) {
@@ -493,7 +423,7 @@ const CafeAndCoffeeShopBreadcrumbsComponent = (
           <section
             id="breadcrumbs-section"
             aria-label="Breadcrumbs"
-            style={{ backgroundColor: sectionBackgroundColor }}
+            style={sectionStyle}
           >
             <div className="breadcrumbs__wrap">
               {visibleBreadcrumbs.length ? (
@@ -513,13 +443,13 @@ const CafeAndCoffeeShopBreadcrumbsComponent = (
                         ? currentPageLabel
                         : breadcrumb.name;
                     const textStyles = isCurrentPage
-                      ? getTextStyles(
+                      ? getStyledTextStyle(
                           props.currentLocation.label.styles,
                           props.currentLocation.label.fontColor,
                           sectionTextColor,
                         )
                       : isRoot
-                        ? getTextStyles(
+                        ? getStyledTextStyle(
                             props.rootLabel.styles,
                             props.rootLabel.fontColor,
                             sectionTextColor,

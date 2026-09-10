@@ -18,6 +18,7 @@ import {
   type YextFields,
   backgroundColors,
   getDefaultRTF,
+  getSurfaceColorStyle,
   resolveComponentData,
   resolveYextEntityField,
   toPuckFields,
@@ -123,6 +124,10 @@ const CafeAndCoffeeShopBannerComponent: PuckComponent<CafeAndCoffeeShopBannerPro
 }) => {
   const { i18n } = useTranslation();
   const streamDocument = useDocument();
+  const sectionStyle = getSurfaceColorStyle(
+    section.backgroundColor,
+    streamDocument,
+  );
   const isMappedField =
     !data.text.constantValueEnabled && Boolean(data.text.field);
 
@@ -140,6 +145,7 @@ const CafeAndCoffeeShopBannerComponent: PuckComponent<CafeAndCoffeeShopBannerPro
       <PageSection
         background={section.backgroundColor}
         className="flex items-center justify-center"
+        outerStyle={sectionStyle}
         verticalPadding="sm"
       >
         <div className="relative flex h-20 w-full flex-row items-center justify-center gap-3 rounded-lg border border-gray-200 bg-gray-100 px-4">
@@ -165,7 +171,6 @@ const CafeAndCoffeeShopBannerComponent: PuckComponent<CafeAndCoffeeShopBannerPro
     data.text,
     i18n.language,
     streamDocument,
-    { richTextStyleOverrides },
   );
 
   if (!resolvedText) {
@@ -182,6 +187,7 @@ const CafeAndCoffeeShopBannerComponent: PuckComponent<CafeAndCoffeeShopBannerPro
           right: "justify-end text-right",
         }[styles.textAlignment]
       }`}
+      outerStyle={sectionStyle}
       verticalPadding="sm"
     >
       <EntityField
@@ -207,7 +213,9 @@ const CafeAndCoffeeShopBannerComponent: PuckComponent<CafeAndCoffeeShopBannerPro
  */
 export const CafeAndCoffeeShopBanner: YextComponentConfig<CafeAndCoffeeShopBannerProps> = {
   label: "Banner",
-  fields: toPuckFields(CafeAndCoffeeShopBannerFields),
+  fields: toPuckFields<CafeAndCoffeeShopBannerProps>(
+    CafeAndCoffeeShopBannerFields,
+  ),
   defaultProps: {
     data: {
       text: {

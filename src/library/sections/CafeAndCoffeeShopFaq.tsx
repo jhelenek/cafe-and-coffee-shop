@@ -7,7 +7,8 @@ import {
   Background,
   createItemSource,
   getAnalyticsScopeHash,
-  getDefaultRTF,
+  getSurfaceColorStyle,
+  getThemeColorCssValue,
   MaybeRTF,
   resolveComponentData,
   type StreamDocument,
@@ -22,6 +23,14 @@ import {
   type YextEntityField,
   type YextFields,
 } from "@yext/visual-editor";
+import {
+  createRtfField,
+  createTextField,
+  defaultTextStyles,
+  getStyledTextStyle,
+  resolveTextFieldValue,
+  resolveTranslatableStringValue,
+} from "../shared/sectionHelpers";
 
 const CafeAndCoffeeShopStyles = String.raw`
 p {
@@ -268,32 +277,6 @@ type StyledTextProps = {
   fontColor?: ThemeColor;
 };
 
-const createTranslatableString = (text: string): TranslatableString => ({
-  defaultValue: text,
-  hasLocalizedValue: "true",
-});
-
-const createTextField = (
-  text: string,
-  field = "",
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(text),
-  constantValueEnabled: field.length === 0,
-});
-
-const createRtfField = (
-  text: string,
-  field = "",
-): YextEntityField<TranslatableRichText> => ({
-  field,
-  constantValue: {
-    defaultValue: getDefaultRTF(text),
-    hasLocalizedValue: "true",
-  },
-  constantValueEnabled: field.length === 0,
-});
-
 type FaqItemProps = {
   question: YextEntityField<TranslatableString>;
   answer: YextEntityField<TranslatableRichText>;
@@ -370,14 +353,6 @@ export type CafeAndCoffeeShopFaqProps = {
   };
 };
 
-const defaultTextStyles: StyledTextValue = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-};
-
 const createStyledText = (
   text: string,
   fontColor: ThemeColor | undefined = undefined,
@@ -390,81 +365,6 @@ const createStyledText = (
 const createTextAppearance = (): TextAppearance => ({
   styles: defaultTextStyles,
   fontColor: undefined,
-});
-
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: Record<string, unknown> | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: Record<string, unknown> | undefined,
-  fallback = "",
-) => {
-  const resolved = resolveComponentData(field, locale, streamDocument)?.trim();
-  return (
-    resolved ||
-    resolveTranslatableStringValue(
-      field.constantValue,
-      locale,
-      streamDocument,
-      fallback,
-    )
-  );
-};
-
-const toThemeCss = (token?: string) => {
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
-};
-
-const getStyleValue = (value: string) =>
-  value === "default" || value.length === 0 ? undefined : value;
-
-const getTextStyles = (
-  value: TextAppearance,
-  fallbackColor?: string,
-): React.CSSProperties => ({
-  color: toThemeCss(value.fontColor?.selectedColor) ?? fallbackColor,
-  fontFamily: getStyleValue(value.styles.fontFamily),
-  fontSize: getStyleValue(value.styles.fontSize),
-  fontWeight: getStyleValue(value.styles.fontWeight),
-  fontStyle: getStyleValue(value.styles.fontStyle),
-  textTransform: getStyleValue(value.styles.textTransform),
 });
 
 const createStyledTextFields = (): YextFields<StyledTextProps> => ({
@@ -590,34 +490,38 @@ const CafeAndCoffeeShopFaqComponent: PuckComponent<
   const [openIndex, setOpenIndex] = React.useState(0);
   const streamDocument = useDocument<StreamDocument>();
   const locale = streamDocument?.locale ?? "en";
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
   const resolvedFaqs = faqSource.resolveItems(
     props.content.faqs,
     streamDocument,
   );
-  const sectionForeground = toThemeCss(
-    props.section.backgroundColor.contrastingColor,
-  );
+  const sectionForeground = sectionStyle.color;
 
   const wrapperStyle: React.CSSProperties &
     Record<"--cr-faq-bg" | "--cr-faq-heading", string | undefined> = {
-    "--cr-faq-bg": toThemeCss(props.section.backgroundColor.selectedColor),
+    "--cr-faq-bg": sectionStyle.backgroundColor,
     "--cr-faq-heading":
-      toThemeCss(props.heading.fontColor?.selectedColor) ?? sectionForeground,
+      getThemeColorCssValue(props.heading.fontColor) ?? sectionForeground,
   };
 
-  const accordionBackgroundColor = toThemeCss(
-    props.content.styles.backgroundColor.selectedColor,
+  const accordionBackgroundColor = getThemeColorCssValue(
+    props.content.styles.backgroundColor,
   );
   const accordionForeground =
-    toThemeCss(props.content.styles.backgroundColor.contrastingColor) ??
+    getThemeColorCssValue(
+      props.content.styles.backgroundColor.contrastingColor,
+    ) ??
     sectionForeground;
 
-  const questionStyle = getTextStyles(
-    props.content.styles.question,
+  const questionStyle = getStyledTextStyle(
+    props.content.styles.question.styles,
+    props.content.styles.question.fontColor,
     accordionForeground,
   );
-  const answerStyle = getTextStyles(
-    props.content.styles.answer,
+  const answerStyle = getStyledTextStyle(
+    props.content.styles.answer.styles,
+    props.content.styles.answer.fontColor,
     accordionForeground,
   );
 
@@ -640,6 +544,7 @@ const CafeAndCoffeeShopFaqComponent: PuckComponent<
             className="local-section section-faqs"
             aria-label="FAQs"
             background={props.section.backgroundColor}
+            style={sectionStyle}
           >
             <div className="faqs__wrap">
               <EntityField
@@ -649,7 +554,11 @@ const CafeAndCoffeeShopFaqComponent: PuckComponent<
               >
                 <h2
                   className="faqs__heading"
-                  style={getTextStyles(props.heading, sectionForeground)}
+                  style={getStyledTextStyle(
+                    props.heading.styles,
+                    props.heading.fontColor,
+                    sectionForeground,
+                  )}
                 >
                   {resolveTextFieldValue(
                     props.heading.text,
@@ -685,10 +594,6 @@ const CafeAndCoffeeShopFaqComponent: PuckComponent<
                           item.answer,
                           locale,
                           streamDocument,
-                          {
-                            richTextStyleOverrides:
-                              answerRichTextStyleOverrides,
-                          },
                         )
                       : undefined;
 

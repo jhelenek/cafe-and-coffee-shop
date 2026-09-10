@@ -11,7 +11,8 @@ import {
   MaybeRTF,
   createItemSource,
   getAnalyticsScopeHash,
-  getDefaultRTF,
+  getSurfaceColorStyle,
+  getThemeColorCssValue,
   msg,
   resolveComponentData,
   resolveLocalizedAssetImage,
@@ -29,6 +30,16 @@ import {
   type YextFields,
 } from "@yext/visual-editor";
 import { PuckComponent } from "@puckeditor/core";
+import {
+  createRtfField,
+  createTextField,
+  createTranslatableString,
+  defaultButtonStyles,
+  defaultTextStyles,
+  hasImageSource,
+  resolveTextFieldValue,
+  resolveTranslatableStringValue,
+} from "../shared/sectionHelpers";
 
 type FeaturedCardImageAppearance = {
   aspectRatio: number;
@@ -85,50 +96,9 @@ const featured2Image =
 const featured3Image =
   "https://a.mktgcdn.com/p/fbSbItkZpsHpkc8qHH7GxvQkWzxsfm6mGc0k4Lmfl-A/1267x1900.jpg";
 
-const defaultTextStyles: StyledTextValue = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-};
-
 const defaultCTAButtonStyles: NonNullable<
   ComprehensiveCTAValue["styles"]["button"]
-> = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-  borderRadius: "default",
-  letterSpacing: "default",
-};
-
-const createTranslatableString = (value: string): TranslatableString => ({
-  defaultValue: value,
-  hasLocalizedValue: "true",
-});
-
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const createTextField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(value),
-  constantValueEnabled,
-});
+> = defaultButtonStyles;
 
 const createImageField = (
   url: string,
@@ -169,19 +139,6 @@ const createCTA = (label: string, link: string): ComprehensiveCTAValue => ({
     color: undefined,
     button: defaultCTAButtonStyles,
   },
-});
-
-const createRtfField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableRichText> => ({
-  field,
-  constantValue: {
-    defaultValue: getDefaultRTF(value),
-    hasLocalizedValue: "true",
-  },
-  constantValueEnabled,
 });
 
 const createFeaturedCard = (
@@ -411,77 +368,6 @@ a, button {
     padding-inline: 14px;
   }
 }`;
-
-const toThemeCss = (token?: string) => {
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
-};
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  resolveComponentData(field, locale, streamDocument)?.trim() ||
-  resolveTranslatableStringValue(
-    field.constantValue,
-    locale,
-    streamDocument,
-    fallback,
-  ).trim();
-
-const hasImageSource = (
-  image: ImageType | ComplexImageType | TranslatableAssetImage | undefined,
-): image is ImageType | ComplexImageType | TranslatableAssetImage => {
-  if (!image || typeof image !== "object") {
-    return false;
-  }
-
-  if ("url" in image && typeof image.url === "string" && image.url.trim()) {
-    return true;
-  }
-
-  if (
-    "image" in image &&
-    image.image &&
-    typeof image.image === "object" &&
-    "url" in image.image &&
-    typeof image.image.url === "string" &&
-    image.image.url.trim()
-  ) {
-    return true;
-  }
-
-  return false;
-};
 
 const resolveCardImageSource = (
   image: ImageType | ComplexImageType | TranslatableAssetImage | undefined,
@@ -735,15 +621,15 @@ const CafeAndCoffeeShopFeaturedComponent: PuckComponent<
 > = (props) => {
   const streamDocument = useDocument<StreamDocument>();
   const locale = streamDocument?.locale ?? "en";
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
   const isEditing = Boolean(props.puck?.isEditing);
   const headingText = resolveTextFieldValue(
     props.heading.text,
     locale,
     streamDocument,
   );
-  const sectionForeground = toThemeCss(
-    props.section.backgroundColor.contrastingColor,
-  );
+  const sectionForeground = sectionStyle.color;
   const featuredImage = {
     ...defaultFeaturedImage,
     ...props.content.styles.image,
@@ -780,16 +666,13 @@ const CafeAndCoffeeShopFeaturedComponent: PuckComponent<
           dir="ltr"
           style={
             {
-              "--cr-featured-bg": toThemeCss(
-                props.section.backgroundColor.selectedColor,
-              ),
+              "--cr-featured-bg": sectionStyle.backgroundColor,
               "--cr-featured-heading":
-                toThemeCss(props.heading.fontColor?.selectedColor) ??
+                getThemeColorCssValue(props.heading.fontColor) ??
                 sectionForeground,
               "--cr-featured-card-title":
-                toThemeCss(
-                  props.content.styles.title.fontColor?.selectedColor,
-                ) ?? sectionForeground,
+                getThemeColorCssValue(props.content.styles.title.fontColor) ??
+                sectionForeground,
             } as React.CSSProperties
           }
         >
@@ -799,6 +682,7 @@ const CafeAndCoffeeShopFeaturedComponent: PuckComponent<
             id="featured-items"
             className="local-section section-featured"
             background={props.section.backgroundColor}
+            style={sectionStyle}
           >
             <div className="featured__inner">
               <EntityField
@@ -810,7 +694,7 @@ const CafeAndCoffeeShopFeaturedComponent: PuckComponent<
                   className="featured__title"
                   style={{
                     color:
-                      toThemeCss(props.heading.fontColor?.selectedColor) ??
+                      getThemeColorCssValue(props.heading.fontColor) ??
                       sectionForeground,
                     fontFamily:
                       props.heading.styles.fontFamily === "default"
@@ -851,13 +735,12 @@ const CafeAndCoffeeShopFeaturedComponent: PuckComponent<
                       "",
                     );
                     const cardForeground =
-                      toThemeCss(
+                      getThemeColorCssValue(
                         props.content.styles.backgroundColor.contrastingColor,
                       ) ?? sectionForeground;
                     const descriptionColor =
-                      toThemeCss(
-                        props.content.styles.description.fontColor
-                          ?.selectedColor,
+                      getThemeColorCssValue(
+                        props.content.styles.description.fontColor,
                       ) ?? cardForeground;
                     const descriptionRichTextStyleOverrides = {
                       ...props.content.styles.description.styles,
@@ -868,10 +751,6 @@ const CafeAndCoffeeShopFeaturedComponent: PuckComponent<
                           item.description,
                           locale,
                           streamDocument,
-                          {
-                            richTextStyleOverrides:
-                              descriptionRichTextStyleOverrides,
-                          },
                         )
                       : undefined;
                     const resolvedCardImage = resolveCardImageSource(
@@ -916,10 +795,10 @@ const CafeAndCoffeeShopFeaturedComponent: PuckComponent<
                         key={`${title || "card"}-${index}`}
                         className={`featured-card${hasCardImage ? "" : " featured-card--no-image"}`}
                         style={{
-                          backgroundColor: toThemeCss(
-                            props.content.styles.backgroundColor.selectedColor,
+                          backgroundColor: getThemeColorCssValue(
+                            props.content.styles.backgroundColor,
                           ),
-                          color: toThemeCss(
+                          color: getThemeColorCssValue(
                             props.content.styles.backgroundColor
                               .contrastingColor,
                           ),
@@ -933,9 +812,8 @@ const CafeAndCoffeeShopFeaturedComponent: PuckComponent<
                         <div className="featured-card__content">
                           <h3
                             style={{
-                              color: toThemeCss(
-                                props.content.styles.title.fontColor
-                                  ?.selectedColor,
+                              color: getThemeColorCssValue(
+                                props.content.styles.title.fontColor,
                               ),
                               fontFamily:
                                 props.content.styles.title.styles.fontFamily ===

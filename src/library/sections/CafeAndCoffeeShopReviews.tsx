@@ -7,7 +7,8 @@ import {
   EntityField,
   getAnalyticsScopeHash,
   getAggregateRating,
-  resolveComponentData,
+  getSurfaceColorStyle,
+  getThemeColorCssValue as toThemeCss,
   type StreamDocument,
   type ThemeColor,
   type TranslatableString,
@@ -17,17 +18,20 @@ import {
   type YextEntityField,
   type YextFields,
 } from "@yext/visual-editor";
+import {
+  createTextField,
+  defaultTextStyles,
+  getFirstPartyAggregateRating,
+  getFirstPartyReviewsAggregate,
+  getValueAtPath,
+  resolveTextFieldValue,
+} from "../shared/sectionHelpers";
 
 type ReviewCardData = {
   authorName: string;
   rating: string;
   reviewDate: string;
   content: string;
-};
-
-type ReviewAggregateRating = {
-  averageRating: number;
-  reviewCount: number;
 };
 
 export type CafeAndCoffeeShopReviewsProps = {
@@ -65,7 +69,6 @@ export type CafeAndCoffeeShopReviewsProps = {
 };
 
 const REVIEW_TOP_REVIEWS_FIELD_PATH = "ref_reviewsAgg.topReviews";
-const REVIEW_PUBLISHER_VALUE = "FIRSTPARTY";
 
 const CafeAndCoffeeShopStyles = String.raw`
 p {
@@ -395,156 +398,6 @@ a, button {
   }
 }`;
 
-const createTranslatableString = (value: string): TranslatableString => ({
-  defaultValue: value,
-  hasLocalizedValue: "true",
-});
-
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const createTextField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(value),
-  constantValueEnabled,
-});
-
-const defaultTextStyles = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-};
-
-const toThemeCss = (value?: ThemeColor | string) => {
-  const token = typeof value === "string" ? value : value?.selectedColor;
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
-};
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  resolveComponentData(field, locale, streamDocument)?.trim() ||
-  resolveTranslatableStringValue(
-    field.constantValue,
-    locale,
-    streamDocument,
-    fallback,
-  ).trim();
-
-const getValueAtPath = (value: unknown, path: string): unknown =>
-  path.split(".").reduce<unknown>((current, part) => {
-    if (current == null) {
-      return undefined;
-    }
-
-    if (Array.isArray(current)) {
-      const index = Number(part);
-      return Number.isInteger(index) ? current[index] : undefined;
-    }
-
-    if (typeof current === "object") {
-      return current[part as keyof typeof current];
-    }
-
-    return undefined;
-  }, value);
-
-const getFirstPartyReviewsAggregate = (
-  streamDocument: StreamDocument | undefined,
-) => {
-  const aggregates = getValueAtPath(streamDocument, "ref_reviewsAgg");
-
-  if (!Array.isArray(aggregates)) {
-    return null;
-  }
-
-  const match = aggregates.find((item) => {
-    if (!item || typeof item !== "object") {
-      return false;
-    }
-
-    return getValueAtPath(item, "publisher") === REVIEW_PUBLISHER_VALUE;
-  });
-
-  return match && typeof match === "object" ? match : null;
-};
-
-const toFiniteNumber = (value: unknown) => {
-  const numericValue =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number.parseFloat(value)
-        : Number.NaN;
-
-  return Number.isFinite(numericValue) ? numericValue : null;
-};
-
-const getFirstPartyAggregateRating = (
-  streamDocument: StreamDocument | undefined,
-): ReviewAggregateRating | null => {
-  const firstPartyAggregate = getFirstPartyReviewsAggregate(streamDocument);
-  const averageRating = toFiniteNumber(
-    getValueAtPath(firstPartyAggregate, "averageRating"),
-  );
-  const reviewCount = toFiniteNumber(
-    getValueAtPath(firstPartyAggregate, "reviewCount"),
-  );
-
-  if (averageRating == null || reviewCount == null) {
-    return null;
-  }
-
-  return {
-    averageRating,
-    reviewCount,
-  };
-};
-
 const formatReviewCountLabel = (value: string) => {
   const numericValue = Number.parseInt(value, 10);
   if (!Number.isFinite(numericValue)) {
@@ -647,7 +500,7 @@ const getFirstPartyTopReviews = (
           return (
             item &&
             typeof item === "object" &&
-            getValueAtPath(item, "publisher") === REVIEW_PUBLISHER_VALUE
+            getValueAtPath(item, "publisher") === "FIRSTPARTY"
           );
         })
       : [];
@@ -785,6 +638,8 @@ const CafeAndCoffeeShopReviewsComponent = (
 ) => {
   const streamDocument = useDocument<StreamDocument>();
   const locale = streamDocument?.locale ?? "en";
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
   const entityReviews = getFirstPartyTopReviews(streamDocument);
   const hasEntityReviews = entityReviews.length > 0;
   const aggregateRating =
@@ -792,10 +647,8 @@ const CafeAndCoffeeShopReviewsComponent = (
     getAggregateRating(streamDocument);
   const hasAggregateReviews = aggregateRating.reviewCount > 0;
   const isPreviewMode = Boolean(props.puck?.isEditing);
-  const sectionBackgroundColor = toThemeCss(props.section.backgroundColor);
-  const sectionForeground = toThemeCss(
-    props.section.backgroundColor.contrastingColor,
-  );
+  const sectionBackgroundColor = sectionStyle.backgroundColor;
+  const sectionForeground = sectionStyle.color;
   const reviewCardBorder = sectionBackgroundColor
     ? `1px solid color-mix(in srgb, ${sectionBackgroundColor} 14%, transparent)`
     : undefined;
@@ -861,7 +714,7 @@ const CafeAndCoffeeShopReviewsComponent = (
           dir="ltr"
           style={
             {
-              "--cr-reviews-bg": toThemeCss(props.section.backgroundColor),
+              "--cr-reviews-bg": sectionBackgroundColor,
               "--cr-reviews-heading":
                 toThemeCss(props.heading.fontColor?.selectedColor) ??
                 sectionForeground,
@@ -875,6 +728,7 @@ const CafeAndCoffeeShopReviewsComponent = (
             className="local-section section-reviews"
             aria-label="Reviews"
             background={props.section.backgroundColor}
+            style={sectionStyle}
           >
             <div className="reviews__wrap">
               <EntityField

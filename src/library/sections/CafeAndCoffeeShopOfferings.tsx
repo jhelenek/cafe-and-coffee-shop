@@ -8,6 +8,8 @@ import {
   EntityField,
   Image,
   getAnalyticsScopeHash,
+  getSurfaceColorStyle,
+  getThemeColorCssValue,
   resolveComponentData,
   type StreamDocument,
   type StyledImageValue,
@@ -20,6 +22,13 @@ import {
   type YextEntityField,
   type YextFields,
 } from "@yext/visual-editor";
+import {
+  createTextField,
+  createTranslatableString,
+  defaultTextStyles,
+  hasImageSource,
+  resolveTextFieldValue,
+} from "../shared/sectionHelpers";
 
 type OfferingsImageProps = {
   image: YextEntityField<ImageType | ComplexImageType | TranslatableAssetImage>;
@@ -66,39 +75,6 @@ const offeringsImageUrl =
 const defaultImageStyles: StyledImageValue = {
   borderRadius: "default",
 };
-
-const defaultTextStyles = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-};
-
-const createTranslatableString = (value: string): TranslatableString => ({
-  defaultValue: value,
-  hasLocalizedValue: "true",
-});
-
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const createTextField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(value),
-  constantValueEnabled,
-});
 
 const createImageField = (
   url: string,
@@ -311,77 +287,6 @@ a, button {
   }
 }
 `;
-const toThemeCss = (token?: string) => {
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
-};
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  resolveComponentData(field, locale, streamDocument)?.trim() ||
-  resolveTranslatableStringValue(
-    field.constantValue,
-    locale,
-    streamDocument,
-    fallback,
-  ).trim();
-
-const hasImageSource = (
-  image: ImageType | ComplexImageType | TranslatableAssetImage | undefined,
-): image is ImageType | ComplexImageType | TranslatableAssetImage => {
-  if (!image || typeof image !== "object") {
-    return false;
-  }
-
-  if ("url" in image && typeof image.url === "string" && image.url.trim()) {
-    return true;
-  }
-
-  if (
-    "image" in image &&
-    image.image &&
-    typeof image.image === "object" &&
-    "url" in image.image &&
-    typeof image.image.url === "string" &&
-    image.image.url.trim()
-  ) {
-    return true;
-  }
-
-  return false;
-};
-
 const imageFields = (label: string): YextFields<OfferingsImageProps> => ({
   image: {
     label: "Image",
@@ -534,6 +439,8 @@ const CafeAndCoffeeShopOfferingsComponent = (
 ) => {
   const streamDocument = useDocument<StreamDocument>();
   const locale = streamDocument?.locale ?? "en";
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
   const sectionImage = resolveComponentData(
     props.sectionImage.image,
     locale,
@@ -589,6 +496,7 @@ const CafeAndCoffeeShopOfferingsComponent = (
             className="local-section split-sections section-offerings"
             aria-label="Offerings"
             background={props.section.backgroundColor}
+            style={sectionStyle}
           >
             <article
               className={`split split--text-left${hasSectionImage ? "" : " split--no-image"}`}
@@ -596,12 +504,8 @@ const CafeAndCoffeeShopOfferingsComponent = (
               <div
                 className="split__panel split__panel--text split__panel--brown"
                 style={{
-                  backgroundColor: toThemeCss(
-                    props.section.backgroundColor.selectedColor,
-                  ),
-                  color: toThemeCss(
-                    props.section.backgroundColor.contrastingColor,
-                  ),
+                  backgroundColor: sectionStyle.backgroundColor,
+                  color: sectionStyle.color,
                 }}
               >
                 <div className="split__offerings">
@@ -615,9 +519,7 @@ const CafeAndCoffeeShopOfferingsComponent = (
                     <h2
                       className="split__title"
                       style={{
-                        color: toThemeCss(
-                          props.heading.fontColor?.selectedColor,
-                        ),
+                        color: getThemeColorCssValue(props.heading.fontColor),
                         fontFamily:
                           props.heading.styles.fontFamily === "default"
                             ? undefined
@@ -655,8 +557,8 @@ const CafeAndCoffeeShopOfferingsComponent = (
                         <li
                           key={`${index}-${resolveComponentData(item, locale, streamDocument) ?? "offering"}`}
                           style={{
-                            color: toThemeCss(
-                              props.content.fontColor?.selectedColor,
+                            color: getThemeColorCssValue(
+                              props.content.fontColor,
                             ),
                             fontFamily:
                               props.content.styles.fontFamily === "default"

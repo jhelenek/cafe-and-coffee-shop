@@ -9,6 +9,8 @@ import {
   EntityField,
   getAnalyticsScopeHash,
   getAggregateRating,
+  getSurfaceColorStyle,
+  getThemeColorCssValue as toThemeCss,
   isDarkColor,
   resolveComponentData,
   resolveLocalizedAssetImage,
@@ -25,6 +27,18 @@ import {
   VisibilityWrapper,
   Background,
 } from "@yext/visual-editor";
+import {
+  createTextField,
+  createTranslatableString,
+  defaultButtonStyles,
+  defaultTextStyles,
+  getFirstPartyAggregateRating,
+  getStyledTextStyle,
+  hasExplicitCtaColor,
+  hasImageSource,
+  resolveTextFieldValue,
+  resolveTranslatableStringValue,
+} from "../shared/sectionHelpers";
 
 type StyledTextProps = {
   text: YextEntityField<TranslatableString>;
@@ -36,21 +50,9 @@ type HeroCta = {
   item: ComprehensiveCTAValue;
 };
 
-type CtaColorState = {
-  styles?: {
-    variant?: string | null;
-    color?: ThemeColor;
-  };
-};
-
 type HeroHoursStatusTemplateProps = Parameters<
   NonNullable<React.ComponentProps<typeof HoursStatus>["statusTemplate"]>
 >[0];
-
-type ReviewAggregateRating = {
-  averageRating: number;
-  reviewCount: number;
-};
 
 export type CafeAndCoffeeShopHeroProps = {
   section: {
@@ -84,50 +86,6 @@ export type CafeAndCoffeeShopHeroProps = {
 
 const heroImageUrl =
   "https://a.mktgcdn.com/p/vQqhmnexQfZueJGyh5M_j5W4EcTkTyZlW93eIoqjjvQ/1900x1267.jpg";
-const REVIEW_PUBLISHER_VALUE = "FIRSTPARTY";
-
-const defaultTextStyles: StyledTextValue = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-};
-
-const defaultCTAButtonStyles = {
-  fontFamily: "default",
-  fontSize: "default",
-  fontWeight: "default",
-  fontStyle: "default",
-  textTransform: "default",
-  borderRadius: "default",
-  letterSpacing: "default",
-};
-
-const createTranslatableString = (value: string): TranslatableString => ({
-  defaultValue: value,
-  hasLocalizedValue: "true",
-});
-
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const createTextField = (
-  value: string,
-  field = "",
-  constantValueEnabled = field.length === 0,
-): YextEntityField<TranslatableString> => ({
-  field,
-  constantValue: createTranslatableString(value),
-  constantValueEnabled,
-});
 
 const createStyledText = (
   value: string,
@@ -179,7 +137,7 @@ const createCTA = (
     styles: {
       variant: variant,
       color: color,
-      button: defaultCTAButtonStyles,
+      button: defaultButtonStyles,
       link: {
         fontFamily: "default",
         fontSize: "default",
@@ -756,96 +714,6 @@ a, button {
   }
 }`;
 
-const toThemeCss = (token?: string) => {
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
-};
-
-const getStyleValue = (value: string) =>
-  value === "default" || value.length === 0 ? undefined : value;
-
-const hasExplicitCtaColor = (cta: CtaColorState) => {
-  const selectedColor = cta.styles?.color?.selectedColor;
-  return Boolean(selectedColor && selectedColor !== "default");
-};
-
-const getStyledTextStyle = (
-  value: StyledTextProps,
-  fallbackColor?: string,
-): React.CSSProperties => ({
-  color: toThemeCss(value.fontColor?.selectedColor) ?? fallbackColor,
-  fontFamily: getStyleValue(value.styles.fontFamily),
-  fontSize: getStyleValue(value.styles.fontSize),
-  fontWeight: getStyleValue(value.styles.fontWeight),
-  fontStyle: getStyleValue(value.styles.fontStyle),
-  textTransform: getStyleValue(value.styles.textTransform),
-});
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-) =>
-  resolveComponentData(field, locale, streamDocument)?.trim() ||
-  resolveTranslatableStringValue(
-    field.constantValue,
-    locale,
-    streamDocument,
-    "",
-  ).trim();
-
-const hasImageSource = (
-  image: TranslatableAssetImage | undefined,
-): image is TranslatableAssetImage => {
-  if (!image || typeof image !== "object") {
-    return false;
-  }
-
-  if ("url" in image && typeof image.url === "string" && image.url.trim()) {
-    return true;
-  }
-
-  if (
-    "image" in image &&
-    image.image &&
-    typeof image.image === "object" &&
-    "url" in image.image &&
-    typeof image.image.url === "string" &&
-    image.image.url.trim()
-  ) {
-    return true;
-  }
-
-  return false;
-};
-
 const getResolvedImage = (
   value: YextEntityField<TranslatableAssetImage>,
   locale: string,
@@ -904,53 +772,6 @@ const getHeroStatusDay = (
         .toLocaleString(dayOptions) ?? "");
 };
 
-const toFiniteNumber = (value: unknown) => {
-  const numericValue =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number.parseFloat(value)
-        : Number.NaN;
-
-  return Number.isFinite(numericValue) ? numericValue : null;
-};
-
-const getFirstPartyReviewAggregateRating = (
-  streamDocument: StreamDocument | undefined,
-): ReviewAggregateRating | null => {
-  const aggregates = (streamDocument as Record<string, unknown> | undefined)
-    ?.ref_reviewsAgg;
-
-  if (!Array.isArray(aggregates)) {
-    return null;
-  }
-
-  const firstPartyAggregate = aggregates.find((item) => {
-    return (
-      item &&
-      typeof item === "object" &&
-      (item as Record<string, unknown>).publisher === REVIEW_PUBLISHER_VALUE
-    );
-  });
-
-  if (!firstPartyAggregate || typeof firstPartyAggregate !== "object") {
-    return null;
-  }
-
-  const aggregateRecord = firstPartyAggregate as Record<string, unknown>;
-  const averageRating = toFiniteNumber(aggregateRecord.averageRating);
-  const reviewCount = toFiniteNumber(aggregateRecord.reviewCount);
-
-  if (averageRating == null || reviewCount == null) {
-    return null;
-  }
-
-  return {
-    averageRating,
-    reviewCount,
-  };
-};
-
 const CafeAndCoffeeShopHeroComponent: PuckComponent<
   CafeAndCoffeeShopHeroProps
 > = (props) => {
@@ -962,15 +783,13 @@ const CafeAndCoffeeShopHeroComponent: PuckComponent<
     locale,
     streamDocument,
   );
-  const sectionBackgroundColor = toThemeCss(
-    props.section.backgroundColor.selectedColor,
-  );
-  const sectionForeground = toThemeCss(
-    props.section.backgroundColor.contrastingColor,
-  );
-  const heroOverlayBackgroundColor = `color-mix(in srgb, ${toThemeCss(
-    props.section.backgroundColor.selectedColor,
-  )} 56%, transparent)`;
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
+  const sectionBackgroundColor = sectionStyle.backgroundColor;
+  const sectionForeground = sectionStyle.color;
+  const heroOverlayBackgroundColor = sectionBackgroundColor
+    ? `color-mix(in srgb, ${sectionBackgroundColor} 56%, transparent)`
+    : undefined;
   const subheading = resolveTextFieldValue(
     props.subheading.text,
     locale,
@@ -982,7 +801,7 @@ const CafeAndCoffeeShopHeroComponent: PuckComponent<
     streamDocument,
   );
   const aggregateRating =
-    getFirstPartyReviewAggregateRating(streamDocument) ??
+    getFirstPartyAggregateRating(streamDocument) ??
     getAggregateRating(streamDocument);
   const ratingValue = aggregateRating.averageRating.toFixed(1);
   const reviewCountValue = String(aggregateRating.reviewCount);
@@ -1024,15 +843,11 @@ const CafeAndCoffeeShopHeroComponent: PuckComponent<
             <section
               className="static-hero"
               aria-label="Hero"
-              style={{
-                ...(backgroundImage.url
-                  ? {}
-                  : {
-                      backgroundColor: toThemeCss(
-                        props.section.backgroundColor.selectedColor,
-                      ),
-                    }),
-              }}
+              style={
+                backgroundImage.url
+                  ? undefined
+                  : { backgroundColor: sectionBackgroundColor }
+              }
             >
               {backgroundImage.url ? (
                 <EntityField
@@ -1069,7 +884,8 @@ const CafeAndCoffeeShopHeroComponent: PuckComponent<
                     <h2
                       className="hero-brandline"
                       style={getStyledTextStyle(
-                        props.heading,
+                        props.heading.styles,
+                        props.heading.fontColor,
                         sectionForeground,
                       )}
                     >
@@ -1086,7 +902,8 @@ const CafeAndCoffeeShopHeroComponent: PuckComponent<
                     <h1
                       className="hero-title-main"
                       style={getStyledTextStyle(
-                        props.subheading,
+                        props.subheading.styles,
+                        props.subheading.fontColor,
                         sectionForeground,
                       )}
                     >

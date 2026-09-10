@@ -11,6 +11,7 @@ import {
   useAnalytics,
 } from "@yext/pages-components";
 import {
+  Background,
   ComprehensiveCTA,
   type ComprehensiveCTAValue,
   EntityField,
@@ -27,12 +28,15 @@ import {
   type YextEntityField,
   type YextFields,
   getAnalyticsScopeHash,
+  getDefaultForegroundColor,
+  getSurfaceColorStyle,
+  getThemeColorCssValue,
   i18nComponentsInstance,
-  isDarkColor,
   normalizeLink,
   resolveComponentData,
   useDocument,
 } from "@yext/visual-editor";
+import { hasImageSource } from "../shared/sectionHelpers";
 
 type SharedHeaderVariant =
   | "centerLogoSplitNav"
@@ -150,58 +154,6 @@ const hasExplicitThemeColor = (color?: ThemeColor): color is ThemeColor => {
   return Boolean(color?.selectedColor && color.selectedColor !== "default");
 };
 
-const getReadableForegroundColor = (
-  surfaceColor: ThemeColor,
-  streamDocument?: StreamDocument,
-): ThemeColor => {
-  return {
-    selectedColor: isDarkColor(surfaceColor, streamDocument)
-      ? "white"
-      : "black",
-    contrastingColor: surfaceColor.selectedColor,
-  };
-};
-
-const resolveThemeColorCssValue = (color?: ThemeColor): string | undefined => {
-  if (!hasExplicitThemeColor(color)) {
-    return undefined;
-  }
-
-  const customColorMatch = color.selectedColor.match(
-    /^\[(#[0-9A-Fa-f]{3,8})\]$/,
-  );
-  if (customColorMatch) {
-    return customColorMatch[1].toUpperCase();
-  }
-
-  switch (color.selectedColor) {
-    case "palette-primary":
-      return "var(--colors-palette-primary)";
-    case "palette-secondary":
-      return "var(--colors-palette-secondary)";
-    case "palette-tertiary":
-      return "var(--colors-palette-tertiary)";
-    case "palette-quaternary":
-      return "var(--colors-palette-quaternary)";
-    case "palette-primary-light":
-      return "hsl(from var(--colors-palette-primary) h s 98)";
-    case "palette-secondary-light":
-      return "hsl(from var(--colors-palette-secondary) h s 98)";
-    case "palette-tertiary-light":
-      return "hsl(from var(--colors-palette-tertiary) h s 98)";
-    case "palette-quaternary-light":
-      return "hsl(from var(--colors-palette-quaternary) h s 98)";
-    case "palette-primary-dark":
-      return "hsl(from var(--colors-palette-primary) h s 20)";
-    case "palette-secondary-dark":
-      return "hsl(from var(--colors-palette-secondary) h s 20)";
-    case "white":
-      return "#FFFFFF";
-    default:
-      return color.selectedColor;
-  }
-};
-
 const resolveBorderRadius = (value?: string): string | undefined => {
   if (!value || value === "default") {
     return undefined;
@@ -226,7 +178,7 @@ const getTextStyles = ({
   >;
 }): React.CSSProperties => {
   return {
-    color: resolveThemeColorCssValue(color),
+    color: getThemeColorCssValue(color),
     fontFamily: styles.fontFamily === "default" ? undefined : styles.fontFamily,
     fontSize: styles.fontSize === "default" ? undefined : styles.fontSize,
     fontWeight: styles.fontWeight === "default" ? undefined : styles.fontWeight,
@@ -283,31 +235,6 @@ const normalizeResolvedLink = ({
   }
 
   return normalizeLink(link, linkType);
-};
-
-const hasImageSource = (
-  image: ImageType | ComplexImageType | TranslatableAssetImage | undefined,
-): boolean => {
-  if (!image || typeof image !== "object") {
-    return false;
-  }
-
-  if ("url" in image && typeof image.url === "string" && image.url.trim()) {
-    return true;
-  }
-
-  if (
-    "image" in image &&
-    image.image &&
-    typeof image.image === "object" &&
-    "url" in image.image &&
-    typeof image.image.url === "string" &&
-    image.image.url.trim()
-  ) {
-    return true;
-  }
-
-  return false;
 };
 
 const SharedHeaderDefaultUtilityIcon = () => (
@@ -657,8 +584,16 @@ const CafeAndCoffeeShopHeaderComponent: PuckComponent<
     (hasExplicitThemeColor(props.navigation.fontColor)
       ? props.navigation.fontColor
       : undefined) ??
-    getReadableForegroundColor(props.section.backgroundColor, streamDocument);
-  const dividerColorValue = resolveThemeColorCssValue(
+    getDefaultForegroundColor(
+      props.section.backgroundColor,
+      streamDocument,
+    ) ?? {
+      selectedColor: "black",
+      contrastingColor: props.section.backgroundColor.selectedColor,
+    };
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
+  const dividerColorValue = getThemeColorCssValue(
     props.section.dividerColor,
   );
   const dividerStyle = dividerColorValue
@@ -832,7 +767,7 @@ const CafeAndCoffeeShopHeaderComponent: PuckComponent<
               aria-label={item.label}
               className="inline-flex h-8 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-80"
               style={{
-                color: resolveThemeColorCssValue(navigationColor),
+                color: getThemeColorCssValue(navigationColor),
               }}
             >
               <span className="flex h-full items-center justify-center">
@@ -1003,13 +938,13 @@ const CafeAndCoffeeShopHeaderComponent: PuckComponent<
       liveVisibility={props.section.visibleOnLivePage}
       isEditing={props.puck.isEditing}
     >
-      <header
+      <Background
+        as="header"
+        background={props.section.backgroundColor}
         className="relative"
         style={{
-          backgroundColor: resolveThemeColorCssValue(
-            props.section.backgroundColor,
-          ),
-          color: resolveThemeColorCssValue(navigationColor),
+          ...sectionStyle,
+          color: getThemeColorCssValue(navigationColor),
         }}
       >
         <div className="hidden lg:block">{desktopVariantContent}</div>
@@ -1048,7 +983,7 @@ const CafeAndCoffeeShopHeaderComponent: PuckComponent<
             }
             className="inline-flex h-10 w-10 items-center justify-center rounded-full"
             style={{
-              color: resolveThemeColorCssValue(navigationColor),
+              color: getThemeColorCssValue(navigationColor),
             }}
           >
             <svg
@@ -1075,9 +1010,7 @@ const CafeAndCoffeeShopHeaderComponent: PuckComponent<
           <div
             className="absolute inset-x-0 top-full z-20 max-h-[calc(100vh-82px)] overflow-y-auto px-6 py-6 md:px-8 lg:hidden"
             style={{
-              backgroundColor: resolveThemeColorCssValue(
-                props.section.backgroundColor,
-              ),
+              backgroundColor: sectionStyle.backgroundColor,
             }}
           >
             <div className="space-y-6">
@@ -1157,7 +1090,7 @@ const CafeAndCoffeeShopHeaderComponent: PuckComponent<
                           aria-label={item.label}
                           className="inline-flex h-8 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-80"
                           style={{
-                            color: resolveThemeColorCssValue(navigationColor),
+                            color: getThemeColorCssValue(navigationColor),
                           }}
                         >
                           <span className="flex h-full items-center justify-center">
@@ -1175,7 +1108,7 @@ const CafeAndCoffeeShopHeaderComponent: PuckComponent<
             </div>
           </div>
         ) : null}
-      </header>
+      </Background>
     </VisibilityWrapper>
   );
 };

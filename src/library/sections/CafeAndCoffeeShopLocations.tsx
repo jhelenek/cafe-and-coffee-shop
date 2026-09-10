@@ -21,11 +21,12 @@ import {
   EntityField,
   getAnalyticsScopeHash,
   getPreferredDistanceUnit,
+  getSurfaceColorStyle,
+  getThemeColorCssValue as toThemeCss,
   MapboxStaticMapComponent,
   mapboxStaticMapStyleOptions,
   mergeMeta,
   type MapboxStaticProps,
-  resolveComponentData,
   resolveUrlTemplate,
   type StreamDocument,
   type ThemeColor,
@@ -38,6 +39,9 @@ import {
   type YextEntityField,
   type YextFields,
 } from "@yext/visual-editor";
+import {
+  resolveTextFieldValue,
+} from "../shared/sectionHelpers";
 
 const CafeAndCoffeeShopStyles = String.raw`
 p {
@@ -391,30 +395,6 @@ type RuntimeProps = CafeAndCoffeeShopLocationsProps & {
   puck?: PuckContext;
 };
 
-const resolveTranslatableStringValue = (
-  value: TranslatableString | undefined,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  value
-    ? resolveComponentData(value, locale, streamDocument)?.trim() || fallback
-    : fallback;
-
-const resolveTextFieldValue = (
-  field: YextEntityField<TranslatableString>,
-  locale: string,
-  streamDocument: StreamDocument | undefined,
-  fallback = "",
-) =>
-  resolveComponentData(field, locale, streamDocument)?.trim() ||
-  resolveTranslatableStringValue(
-    field.constantValue,
-    locale,
-    streamDocument,
-    fallback,
-  ).trim();
-
 const fields: YextFields<CafeAndCoffeeShopLocationsProps> = {
   section: {
     label: "Section",
@@ -767,38 +747,6 @@ const defaultProps: CafeAndCoffeeShopLocationsProps = {
       showCountry: false,
     },
   },
-};
-
-const toThemeCss = (token?: string) => {
-  if (!token) {
-    return undefined;
-  }
-
-  if (token.startsWith("[") && token.endsWith("]")) {
-    return token.slice(1, -1);
-  }
-
-  if (token === "white") {
-    return "#ffffff";
-  }
-
-  if (token === "black") {
-    return "#000000";
-  }
-
-  if (token.endsWith("-light")) {
-    return `hsl(from var(--colors-${token.replace("-light", "")}) h s 98)`;
-  }
-
-  if (token.endsWith("-dark")) {
-    return `hsl(from var(--colors-${token.replace("-dark", "")}) h s 20)`;
-  }
-
-  if (token.startsWith("palette-")) {
-    return `var(--colors-${token})`;
-  }
-
-  return token;
 };
 
 const degreesToRadians = (degrees: number) => (degrees * Math.PI) / 180;
@@ -1248,24 +1196,26 @@ const CafeAndCoffeeShopLocationsComponent = (props: RuntimeProps) => {
   }>();
   const isEditing = Boolean(props.puck?.isEditing);
   const locale = streamDocument?.locale ?? "en";
+  const sectionStyle =
+    getSurfaceColorStyle(props.section.backgroundColor, streamDocument) ?? {};
   const nearby = {
     ...defaultProps.nearby,
-    ...(props.nearby ?? {}),
+    ...props.nearby,
     content: {
       ...defaultProps.nearby.content,
-      ...(props.nearby?.content ?? {}),
+      ...props.nearby?.content,
     },
     hoursStyles: {
       ...defaultProps.nearby.hoursStyles,
-      ...(props.nearby?.hoursStyles ?? {}),
+      ...props.nearby?.hoursStyles,
     },
     phone: {
       ...defaultProps.nearby.phone,
-      ...(props.nearby?.phone ?? {}),
+      ...props.nearby?.phone,
     },
     address: {
       ...defaultProps.nearby.address,
-      ...(props.nearby?.address ?? {}),
+      ...props.nearby?.address,
     },
   };
   const currentCoordinate = streamDocument?.yextDisplayCoordinate;
@@ -1310,9 +1260,7 @@ const CafeAndCoffeeShopLocationsComponent = (props: RuntimeProps) => {
     enableNearbyLocations && nearbyLocationsStatus === "pending";
   const shouldShowNearbyCards =
     nearbyLocationsStatus === "success" && nearbyLocationDocs.length > 0;
-  const sectionForeground = toThemeCss(
-    props.section.backgroundColor.contrastingColor,
-  );
+  const sectionForeground = sectionStyle.color;
   const statusTextColor =
     toThemeCss(nearby.statusColor?.selectedColor) ?? sectionForeground;
   const loadingText = resolveTextFieldValue(
@@ -1334,7 +1282,6 @@ const CafeAndCoffeeShopLocationsComponent = (props: RuntimeProps) => {
   );
   const mapProps: MapboxStaticProps = {
     ...props.map,
-    apiKey: mapboxApiKey,
   };
   const mapPuck: PuckContext = props.puck ?? {
     renderDropZone: () => null,
@@ -1360,9 +1307,7 @@ const CafeAndCoffeeShopLocationsComponent = (props: RuntimeProps) => {
           dir="ltr"
           style={
             {
-              "--cr-locations-bg": toThemeCss(
-                props.section.backgroundColor?.selectedColor,
-              ),
+              "--cr-locations-bg": sectionStyle.backgroundColor,
               "--cr-locations-heading":
                 toThemeCss(props.heading.fontColor?.selectedColor) ??
                 sectionForeground,
@@ -1374,6 +1319,7 @@ const CafeAndCoffeeShopLocationsComponent = (props: RuntimeProps) => {
             id="locations-section"
             className="local-section section-locations"
             aria-label="Where to find us"
+            style={sectionStyle}
           >
             <div className="locations__wrap">
               <EntityField
